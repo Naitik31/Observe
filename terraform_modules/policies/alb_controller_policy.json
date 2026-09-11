@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:*",
+        "ec2:Describe*",
+        "iam:CreateServiceLinkedRole",
+        "wafv2:GetWebACL",
+        "tag:GetResources",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupIngress"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

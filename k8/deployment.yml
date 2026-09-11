@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vector-loadgen
+  namespace: observability
+  labels:
+    app: vector-loadgen
+spec:
+  replicas: 1   
+  selector:
+    matchLabels:
+      app: vector-loadgen
+  template:
+    metadata:
+      labels:
+        app: vector-loadgen
+    spec:
+      initContainers:
+        - name: wait-for-openobserve
+          image: curlimages/curl:8.10.1
+          command:
+            - sh
+            - -c
+            - |
+              until curl -sf http://openobserve.observability.svc.cluster.local:5080/healthz; do
+                echo "waiting for openobserve..."
+                sleep 5
+              done
+              echo "openobserve is ready"
+
+      containers:
+        - name: vector
+          image: timberio/vector:0.43.0-alpine
+          args: ["--config", "/etc/vector/vector.yaml"]
+          envFrom:
+            - secretRef:
+                name: openobserve-credentials
+          ports:
+            - name: statsd
+              containerPort: 8125
+              protocol: UDP
+            - name: api
+              containerPort: 8686
+              protocol: TCP
+          volumeMounts:
+            - name: vector-config
+              mountPath: /etc/vector
+              readOnly: true
+            - name: vector-data
+              mountPath: /vector-data-dir
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8686
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+        - name: metrics-generator
+          image: python:3.12-alpine
+          command: ["python3", "/scripts/generator.py"]
+          env:
+            - name: STATSD_HOST
+              value: "127.0.0.1"
+            - name: STATSD_PORT
+              value: "8125"
+            - name: TARGET_BYTES_PER_SEC
+              value: "1491308"
+            - name: METRICS_PER_PACKET
+              value: "40"
+          volumeMounts:
+            - name: metrics-generator-script
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "128Mi"
+
+      volumes:
+        - name: vector-config
+          configMap:
+            name: vector-config
+        - name: vector-data
+          emptyDir: {}
+        - name: metrics-generator-script
+          configMap:
+            name: metrics-generator-script

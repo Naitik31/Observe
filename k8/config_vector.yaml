@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-config
+  namespace: observability
+data:
+  vector.yaml: |
+    data_dir: /vector-data-dir
+
+    api:
+      enabled: true
+      address: 0.0.0.0:8686
+
+    sources:
+      demo_logs_json:
+        type: demo_logs
+        format: json
+        interval: 0.001
+
+      demo_logs_apache:
+        type: demo_logs
+        format: apache_common
+        interval: 0.002
+
+      dummy_app_metrics:
+        type: statsd
+        address: 0.0.0.0:8125
+        mode: udp
+
+      host_metrics:
+        type: host_metrics
+        scrape_interval_secs: 5
+        collectors: [cpu, memory, disk, network, load]
+
+      vector_internals:
+        type: internal_metrics
+        scrape_interval_secs: 5
+
+    transforms:
+      enrich_logs_json:
+        type: remap
+        inputs: [demo_logs_json]
+        source: |
+          # Two VRL rules being obeyed here:
+          #  1. Array indexes inside [] must be INTEGER LITERALS, so
+          #     arr[random_int(0,5)] is error[E203]. Use get() for a
+          #     dynamic index instead.
+          #  2. random_int is INFALLIBLE, so writing random_int!() is
+          #     error[E620] "can't abort infallible function" - no "!".
+          #     get() IS fallible, so get!() keeps its "!".
+          services = ["auth-service","payment-service","order-service","inventory-service","notification-service","gateway-service"]
+          levels = ["INFO","INFO","INFO","WARN","ERROR","DEBUG"]
+          # min inclusive, max exclusive -> yields 0..5
+          svc_idx = random_int(0, 6)
+          lvl_idx = random_int(0, 6)
+          .service = get!(services, [svc_idx])
+          .log_level = get!(levels, [lvl_idx])
+          .env = "dummy-load-test"
+
+      enrich_logs_apache:
+        type: remap
+        inputs: [demo_logs_apache]
+        source: |
+          services = ["auth-service","payment-service","order-service","inventory-service","notification-service","gateway-service"]
+          svc_idx = random_int(0, 6)
+          .service = get!(services, [svc_idx])
+
+          status_code, err = to_int(.status)
+          if err == null {
+            .log_level = if status_code >= 500 {
+              "ERROR"
+            } else if status_code >= 400 {
+              "WARN"
+            } else {
+              "INFO"
+            }
+          } else {
+            .log_level = "INFO"
+          }
+          .env = "dummy-load-test"
+
+      # Log volume knob: events/sec ceiling. ~3000 x ~500-700 byte lines
+      # lands near 5GB/hour. Measure in OpenObserve and adjust.
+      throttle_logs:
+        type: throttle
+        inputs: [enrich_logs_json, enrich_logs_apache]
+        threshold: 3000
+        window_secs: 1
+
+    sinks:
+      openobserve_logs:
+        type: http
+        inputs: [throttle_logs]
+        uri: "${OPENOBSERVE_LOGS_URL}"
+        method: post
+        encoding:
+          codec: json
+        auth:
+          strategy: basic
+          user: "${OPENOBSERVE_USER}"
+          password: "${OPENOBSERVE_PASSWORD}"
+        batch:
+          max_bytes: 2000000
+          timeout_secs: 2
+        request:
+          headers:
+            Content-Type: "application/json"
+
+      openobserve_metrics:
+        type: prometheus_remote_write
+        inputs: [dummy_app_metrics, host_metrics, vector_internals]
+        endpoint: "${OPENOBSERVE_METRICS_URL}"
+        # OpenObserve's remote_write route is POST-only, so Vector's GET
+        # healthcheck returns 404 even when ingestion works fine. Disabled
+        # so that false alarm does not mask real sink errors.
+        healthcheck:
+          enabled: false
+        auth:
+          strategy: basic
+          user: "${OPENOBSERVE_USER}"
+          password: "${OPENOBSERVE_PASSWORD}"
+        batch:
+          timeout_secs: 5

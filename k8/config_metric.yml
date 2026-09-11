@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metrics-generator-script
+  namespace: observability
+data:
+  generator.py: |
+    import os
+    import socket
+    import random
+    import time
+
+    STATSD_HOST = os.getenv("STATSD_HOST", "127.0.0.1")
+    STATSD_PORT = int(os.getenv("STATSD_PORT", "8125"))
+    # Default target ~5GB/hour of raw statsd text pushed into Vector.
+    # 5 * 1024**3 bytes / 3600 seconds =~ 1,491,308 bytes/sec
+    TARGET_BYTES_PER_SEC = float(os.getenv("TARGET_BYTES_PER_SEC", "1491308"))
+    METRICS_PER_PACKET = int(os.getenv("METRICS_PER_PACKET", "40"))
+
+    SERVICES = [
+        "auth-service", "payment-service", "order-service",
+        "inventory-service", "notification-service", "gateway-service",
+    ]
+    METRIC_NAMES = [
+        "cpu_usage_pct", "memory_usage_mb", "request_latency_ms",
+        "request_count", "error_count", "queue_depth",
+        "disk_io_ops", "cache_hit_ratio",
+    ]
+    TYPES = ["g", "c", "ms"]  # gauge, counter, timer
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def build_packet():
+        lines = []
+        for _ in range(METRICS_PER_PACKET):
+            service = random.choice(SERVICES)
+            name = random.choice(METRIC_NAMES)
+            metric_type = random.choice(TYPES)
+            value = round(random.uniform(0, 1000), 2)
+            lines.append(f"{name}:{value}|{metric_type}|#service:{service},env:dummy-load-test")
+        return ("\n".join(lines) + "\n").encode("utf-8")
+
+    def main():
+        window_start = time.time()
+        bytes_sent_window = 0
+        print(f"Sending dummy statsd metrics to {STATSD_HOST}:{STATSD_PORT}, "
+              f"target ~{TARGET_BYTES_PER_SEC:.0f} bytes/sec", flush=True)
+        while True:
+            packet = build_packet()
+            sock.sendto(packet, (STATSD_HOST, STATSD_PORT))
+            bytes_sent_window += len(packet)
+
+            now = time.time()
+            elapsed = now - window_start
+            if elapsed >= 1.0:
+                current_rate = bytes_sent_window / elapsed
+                window_start = now
+                bytes_sent_window = 0
+                if current_rate > TARGET_BYTES_PER_SEC:
+                    time.sleep(0.05)
+            else:
+                time.sleep(0.001)
+
+    if __name__ == "__main__":
+        main()

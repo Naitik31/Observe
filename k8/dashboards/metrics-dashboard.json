@@ -1,0 +1,97 @@
+{
+  "version": 3,
+  "dashboardId": "vector-dummy-metrics-dashboard",
+  "title": "Vector Dummy Metrics Dashboard",
+  "description": "Key metric visualizations and ingestion rate for the Vector demo metrics load generator.",
+  "role": "",
+  "owner": "",
+  "tabs": [
+    {
+      "tabId": "default",
+      "name": "Overview",
+      "panels": [
+        {
+          "id": "panel_request_latency",
+          "type": "line",
+          "title": "Request Latency (ms) by Service",
+          "description": "Average dummy request_latency_ms metric, grouped by service tag",
+          "queries": [
+            {
+              "query": "avg(request_latency_ms) by (service)",
+              "queryType": "promql",
+              "fields": {
+                "stream": "request_latency_ms",
+                "stream_type": "metrics"
+              }
+            }
+          ]
+        },
+        {
+          "id": "panel_cpu_usage",
+          "type": "area",
+          "title": "CPU Usage % by Service",
+          "description": "Average dummy cpu_usage_pct metric, grouped by service tag",
+          "queries": [
+            {
+              "query": "avg(cpu_usage_pct) by (service)",
+              "queryType": "promql",
+              "fields": {
+                "stream": "cpu_usage_pct",
+                "stream_type": "metrics"
+              }
+            }
+          ]
+        },
+        {
+          "id": "panel_error_count",
+          "type": "bar",
+          "title": "Error Count by Service",
+          "description": "Sum of dummy error_count metric, grouped by service tag",
+          "queries": [
+            {
+              "query": "sum(error_count) by (service)",
+              "queryType": "promql",
+              "fields": {
+                "stream": "error_count",
+                "stream_type": "metrics"
+              }
+            }
+          ]
+        },
+        {
+          "id": "panel_ingestion_rate",
+          "type": "line",
+          "title": "Metrics Ingestion Rate (samples/sec)",
+          "description": "Rate of metric samples received by Vector, from Vector's internal_metrics",
+          "queries": [
+            {
+              "query": "rate(vector_component_received_events_total{component_kind=\"source\"}[1m])",
+              "queryType": "promql",
+              "fields": {
+                "stream": "vector_component_received_events_total",
+                "stream_type": "metrics"
+              }
+            }
+          ]
+        },
+        {
+          "id": "panel_host_memory",
+          "type": "line",
+          "title": "Host Memory Usage",
+          "description": "Real host memory metrics collected via Vector's host_metrics source",
+          "queries": [
+            {
+              "query": "host_memory_used_bytes",
+              "queryType": "promql",
+              "fields": {
+                "stream": "host_memory_used_bytes",
+                "stream_type": "metrics"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variables": { "list": [] }
+}

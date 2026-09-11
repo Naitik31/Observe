@@ -1,0 +1,90 @@
+{
+  "version": 3,
+  "dashboardId": "vector-dummy-logs-dashboard",
+  "title": "Vector Dummy Logs Dashboard",
+  "description": "Volume over time, breakdown by log level, and top services for the Vector demo_logs load generator.",
+  "role": "",
+  "owner": "",
+  "tabs": [
+    {
+      "tabId": "default",
+      "name": "Overview",
+      "panels": [
+        {
+          "id": "panel_log_volume_over_time",
+          "type": "bar",
+          "title": "Log Volume Over Time",
+          "description": "Count of ingested log events per minute",
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp, '1 minute') AS \"x_axis_1\", count(*) AS \"y_axis_1\" FROM \"dummy_logs\" GROUP BY x_axis_1 ORDER BY x_axis_1",
+              "customQuery": true,
+              "fields": {
+                "stream": "dummy_logs",
+                "stream_type": "logs",
+                "x": [{ "alias": "x_axis_1", "column": "_timestamp", "label": "Time" }],
+                "y": [{ "alias": "y_axis_1", "column": "count(*)", "label": "Events" }]
+              },
+              "config": { "promql_legend": "" }
+            }
+          ]
+        },
+        {
+          "id": "panel_log_level_breakdown",
+          "type": "pie",
+          "title": "Breakdown by Log Level",
+          "description": "Share of events per log level over the selected time range",
+          "queries": [
+            {
+              "query": "SELECT log_level AS \"x_axis_1\", count(*) AS \"y_axis_1\" FROM \"dummy_logs\" GROUP BY log_level ORDER BY y_axis_1 DESC",
+              "customQuery": true,
+              "fields": {
+                "stream": "dummy_logs",
+                "stream_type": "logs",
+                "x": [{ "alias": "x_axis_1", "column": "log_level", "label": "Log Level" }],
+                "y": [{ "alias": "y_axis_1", "column": "count(*)", "label": "Events" }]
+              }
+            }
+          ]
+        },
+        {
+          "id": "panel_top_services",
+          "type": "table",
+          "title": "Top Services by Log Volume",
+          "description": "Services generating the most log events",
+          "queries": [
+            {
+              "query": "SELECT service AS \"x_axis_1\", count(*) AS \"y_axis_1\" FROM \"dummy_logs\" GROUP BY service ORDER BY y_axis_1 DESC LIMIT 10",
+              "customQuery": true,
+              "fields": {
+                "stream": "dummy_logs",
+                "stream_type": "logs",
+                "x": [{ "alias": "x_axis_1", "column": "service", "label": "Service" }],
+                "y": [{ "alias": "y_axis_1", "column": "count(*)", "label": "Events" }]
+              }
+            }
+          ]
+        },
+        {
+          "id": "panel_error_rate_over_time",
+          "type": "line",
+          "title": "Error Log Rate Over Time",
+          "description": "ERROR-level events per minute, useful as a quick health signal",
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp, '1 minute') AS \"x_axis_1\", count(*) AS \"y_axis_1\" FROM \"dummy_logs\" WHERE log_level = 'ERROR' GROUP BY x_axis_1 ORDER BY x_axis_1",
+              "customQuery": true,
+              "fields": {
+                "stream": "dummy_logs",
+                "stream_type": "logs",
+                "x": [{ "alias": "x_axis_1", "column": "_timestamp", "label": "Time" }],
+                "y": [{ "alias": "y_axis_1", "column": "count(*)", "label": "Errors" }]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variables": { "list": [] }
+}
